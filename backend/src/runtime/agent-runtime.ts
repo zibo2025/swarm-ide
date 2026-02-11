@@ -234,6 +234,15 @@ const AGENT_TOOLS = [
   {
     type: "function",
     function: {
+      name: "list_mcp_tools",
+      description:
+        "List all connected MCP servers and the tools they provide. Use this to discover your available MCP capabilities.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "bash",
       description:
         "Run a shell command on the server. Returns stdout/stderr/exitCode. Use for debugging or file operations.",
@@ -626,6 +635,13 @@ class AgentRunner {
       const role = await store.getAgentRole({ agentId: this.agentId }).catch(() => null);
       emitToolDone(true);
       return { ok: true, agentId: this.agentId, workspaceId, role };
+    }
+
+    if (name === "list_mcp_tools") {
+      const mcp = await getMcpRegistry(BUILTIN_TOOL_NAMES);
+      const summary = mcp.getServerSummary();
+      emitToolDone(true);
+      return { ok: true, servers: summary, totalTools: summary.reduce((n, s) => n + s.tools.length, 0) };
     }
 
     if (name === "get_skill") {

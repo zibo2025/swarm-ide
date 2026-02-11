@@ -34,14 +34,12 @@ export default function ClearDbButton() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-      <button className="btn" onClick={() => void onReset()} disabled={busy !== null}>
-        {busy === "reset" ? "Resetting..." : "Reset DB + Redis"}
+    <div className="home-admin-row">
+      <button className="home-admin-btn" onClick={() => void onReset()} disabled={busy !== null}>
+        {busy === "reset" ? "重置中…" : "重置数据库 + Redis"}
       </button>
       {error ? (
-        <span className="muted" style={{ color: "#fecaca", fontSize: 13 }}>
-          {error}
-        </span>
+        <div className="home-create-error mono">{error}</div>
       ) : null}
     </div>
   );

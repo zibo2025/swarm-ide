@@ -23,11 +23,6 @@
                 "--browserUrl=http://109.244.159.17:9999"
             ],
             "disabled": false
-        },
-            "PrimeMatrixData-http": {
-                "type": "http",
-      "url": "https://mcp.yidian.cn/mcp/16d05fda79166fdc7e1a0c5a8584ad5d"
-    }
-
+        }
     }
 }

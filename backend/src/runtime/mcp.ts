@@ -148,6 +148,22 @@ class McpRegistry {
     return this.tools.has(name);
   }
 
+  getServerSummary() {
+    const serverTools = new Map<string, { description: string; tools: string[] }>();
+    for (const entry of this.tools.values()) {
+      let info = serverTools.get(entry.serverName);
+      if (!info) {
+        info = { description: "", tools: [] };
+        serverTools.set(entry.serverName, info);
+      }
+      info.tools.push(entry.exposedName);
+    }
+    return Array.from(serverTools.entries()).map(([name, info]) => ({
+      server: name,
+      tools: info.tools,
+    }));
+  }
+
   getToolDefinitions() {
     return Array.from(this.tools.values()).map((tool) => ({
       type: "function" as const,
@@ -261,8 +277,16 @@ class McpRegistry {
 
     if (server.command || server.type === "stdio") {
       if (!server.command) throw new Error(`Missing MCP command for server: ${name}`);
+      let command = server.command;
+      if (command === "npx") {
+        try {
+          require("child_process").execSync("which npx", { stdio: "ignore" });
+        } catch {
+          command = "bunx";
+        }
+      }
       const transport = new StdioClientTransport({
-        command: server.command,
+        command,
         args: server.args ?? [],
         env: { ...cleanEnv(process.env), ...(server.env ?? {}) },
       });

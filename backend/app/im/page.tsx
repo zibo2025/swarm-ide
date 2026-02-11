@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, TouchEvent as ReactTouchEvent } from "react";
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Briefcase, ChevronDown, ChevronLeft, ChevronRight, Code2, Network, User } from "lucide-react";
+import { Bot, Brain, Briefcase, ChevronDown, ChevronLeft, ChevronRight, Code2, MessageSquare, Network, Square, User, Wrench, Zap } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
 import { mermaid } from "@streamdown/mermaid";
@@ -184,7 +184,7 @@ function cx(...classes: Array<string | false | undefined | null>) {
 
 export default function IMPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading...</div>}>
+    <Suspense fallback={<div style={{ padding: 24, color: '#71717a' }}>加载中…</div>}>
       <IMPageInner />
     </Suspense>
   );
@@ -208,6 +208,9 @@ function IMPageInner() {
   const [reasoningStream, setReasoningStream] = useState("");
   const [toolStream, setToolStream] = useState("");
   const [llmHistory, setLlmHistory] = useState("");
+  const [streamSteps, setStreamSteps] = useState<Array<{ id: number; type: "reasoning" | "content" | "tool"; collapsed: boolean; done: boolean }>>([]);
+  const streamStepCounterRef = useRef(0);
+  const activeStepTypeRef = useRef<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [vizEvents, setVizEvents] = useState<VizEvent[]>([]);
   const [vizBeams, setVizBeams] = useState<VizBeam[]>([]);
@@ -219,10 +222,10 @@ function IMPageInner() {
   const [vizDebug, setVizDebug] = useState<VizDebugEntry[]>([]);
   const [vizEventsCollapsed, setVizEventsCollapsed] = useState(false);
   const [rightPanels, setRightPanels] = useState<RightPanelState[]>([
-    { id: "history", title: "LLM history", size: 320, collapsed: false },
-    { id: "content", title: "Realtime content", size: 220, collapsed: false },
-    { id: "reasoning", title: "Realtime reasoning", size: 220, collapsed: false },
-    { id: "tools", title: "Realtime tools", size: 200, collapsed: false },
+    { id: "history", title: "LLM 历史", size: 320, collapsed: false },
+    { id: "content", title: "实时内容", size: 220, collapsed: false },
+    { id: "reasoning", title: "实时推理", size: 220, collapsed: false },
+    { id: "tools", title: "实时工具", size: 200, collapsed: false },
   ]);
   const [midSplitRatio, setMidSplitRatio] = useState(0.55);
   const [midStackHeight, setMidStackHeight] = useState(0);
@@ -779,6 +782,9 @@ function IMPageInner() {
       setReasoningStream("");
       setToolStream("");
       setAgentError(null);
+      setStreamSteps([]);
+      streamStepCounterRef.current = 0;
+      activeStepTypeRef.current = null;
       toolCallBuffersRef.current = new Map();
       toolResultBuffersRef.current = new Map();
 
@@ -787,6 +793,17 @@ function IMPageInner() {
       const es = new EventSource(`/api/agents/${agentId}/context-stream${suffix}`);
       esRef.current = es;
 
+      const ensureStep = (type: "reasoning" | "content" | "tool") => {
+        if (activeStepTypeRef.current !== type) {
+          activeStepTypeRef.current = type;
+          const id = ++streamStepCounterRef.current;
+          setStreamSteps((prev) => [
+            ...prev.map((s) => s.done ? s : { ...s, done: true, collapsed: true }),
+            { id, type, collapsed: false, done: false },
+          ]);
+        }
+      };
+
       es.onmessage = (evt) => {
         try {
           const payload = JSON.parse(evt.data) as AgentStreamEvent;
@@ -794,10 +811,13 @@ function IMPageInner() {
             const chunk = payload.data.delta;
             if (chunk) {
               if (payload.data.kind === "content") {
+                ensureStep("content");
                 setContentStream((t) => t + chunk);
               } else if (payload.data.kind === "reasoning") {
+                ensureStep("reasoning");
                 setReasoningStream((t) => t + chunk);
               } else {
+                ensureStep("tool");
                 const name = payload.data.tool_call_name ?? payload.data.tool_call_id ?? "tool_call";
                 const key = payload.data.tool_call_id ?? name;
                 const buffers =
@@ -821,6 +841,9 @@ function IMPageInner() {
             setContentStream("");
             setReasoningStream("");
             setToolStream("");
+            activeStepTypeRef.current = null;
+            setStreamSteps([]);
+            streamStepCounterRef.current = 0;
             toolCallBuffersRef.current = new Map();
             toolResultBuffersRef.current = new Map();
             return;
@@ -829,11 +852,16 @@ function IMPageInner() {
             setContentStream("");
             setReasoningStream("");
             setToolStream("");
+            activeStepTypeRef.current = null;
+            setStreamSteps([]);
+            streamStepCounterRef.current = 0;
             toolCallBuffersRef.current = new Map();
             toolResultBuffersRef.current = new Map();
             return;
           }
           if (payload.event === "agent.done") {
+            setStreamSteps((prev) => prev.map((s) => ({ ...s, done: true, collapsed: true })));
+            activeStepTypeRef.current = null;
             toolCallBuffersRef.current = new Map();
             toolResultBuffersRef.current = new Map();
             const groupId = activeGroupIdRef.current;
@@ -1528,11 +1556,16 @@ function IMPageInner() {
     const prefixWidth = depth > 0 ? depth * guideWidth + guideWidth : 0;
     const previewIndent = tree ? prefixWidth + caretWidth + caretGap : 0;
     return (
-      <button
+      <div
         key={g.id}
+        role="button"
+        tabIndex={0}
         className={cx("row", g.id === activeGroupId && "active")}
         onClick={() => {
           setActiveGroupId(g.id);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") setActiveGroupId(g.id);
         }}
         style={{ paddingLeft: 16 }}
       >
@@ -1588,7 +1621,7 @@ function IMPageInner() {
         ) : null}
         {g.contextTokens > 0 && (
           <div style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, marginBottom: 2 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: 2 }}>
               <span className="muted">Context</span>
               <span className="mono" style={{ color: (g.contextTokens / tokenLimit) > 0.8 ? "#ef4444" : (g.contextTokens / tokenLimit) > 0.5 ? "#facc15" : "#22c55e" }}>
                 {g.contextTokens.toLocaleString()}
@@ -1608,7 +1641,7 @@ function IMPageInner() {
             </div>
           </div>
         )}
-      </button>
+      </div>
     );
   };
 
@@ -1617,27 +1650,19 @@ function IMPageInner() {
       left={
         <aside className="panel panel-left">
         <div className="header">
-          <div>
-            <div style={{ fontWeight: 700 }}>Workspace</div>
-            <div className="muted mono" style={{ fontSize: 12 }}>
-              {session?.workspaceId ?? "-"}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'linear-gradient(135deg, #38bdf8, #818cf8)' }} />
+            <div style={{ fontWeight: 700, fontSize: 13 }}>工作区</div>
           </div>
-          <div style={{ display: "flex", gap: 8 }} />
-        </div>
-
-        <div style={{ padding: 12 }}>
-          <div className="muted mono" style={{ fontSize: 12, lineHeight: 1.4 }}>
-            human: {session?.humanAgentId ?? "-"}
-            <br />
-            assistant: {session?.assistantAgentId ?? "-"}
+          <div className="muted mono" style={{ fontSize: 12 }}>
+            {session?.workspaceId?.slice(0, 8) ?? "—"}
           </div>
         </div>
 
-        <div className="list">
+        <div className="list" style={{ flex: '1 1 0', minHeight: 0 }}>
           {agentTreeRows.length === 0 && extraGroups.length === 0 ? (
-            <div style={{ padding: 16 }} className="muted">
-              No groups yet.
+            <div style={{ padding: 16, textAlign: 'center' }} className="muted">
+              暂无对话
             </div>
           ) : (
             <>
@@ -1657,31 +1682,102 @@ function IMPageInner() {
             </>
           )}
         </div>
+
+        {/* ── 事件流（左侧，LLM 上下文上方） ── */}
+        <div className="ws-events-section">
+          <button
+            className="left-llm-toggle"
+            onClick={() => setVizEventsCollapsed((c) => !c)}
+          >
+            <span style={{ fontSize: 12 }}>{vizEventsCollapsed ? "▸" : "▾"}</span>
+            <span>事件流</span>
+            <span className="left-llm-count">{vizEvents.length}</span>
+          </button>
+          {!vizEventsCollapsed && (
+            <div className="ws-events-body">
+              {vizEvents.length === 0 ? (
+                <div className="muted" style={{ padding: '4px 8px' }}>暂无事件</div>
+              ) : (
+                vizEvents.slice(-8).reverse().map((evt) => (
+                  <div key={evt.id} className="ws-event-item">
+                    <span
+                      className="ws-event-dot"
+                      style={{
+                        background:
+                          evt.kind === "agent" ? "#60a5fa"
+                          : evt.kind === "message" ? "#fbbf24"
+                          : evt.kind === "llm" ? "#38bdf8"
+                          : evt.kind === "tool" ? "#f97316"
+                          : "#a855f7",
+                      }}
+                    />
+                    <span className="ws-event-label">{evt.label}</span>
+                    <span className="ws-event-time">{new Date(evt.at).toLocaleTimeString()}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── LLM 历史（左侧底部） ── */}
+        <div className="left-llm-section">
+          <button
+            className="left-llm-toggle"
+            type="button"
+            onClick={() => toggleRightPanel("history")}
+          >
+            <span style={{ fontSize: 12 }}>{rightPanels.find(p => p.id === "history")?.collapsed ? "▸" : "▾"}</span>
+            <span>LLM 上下文</span>
+            {Array.isArray(llmHistoryParsed) && (
+              <span className="left-llm-count">{llmHistoryParsed.length}</span>
+            )}
+          </button>
+          {!rightPanels.find(p => p.id === "history")?.collapsed && (
+            <div className="left-llm-body">
+              {Array.isArray(llmHistoryParsed) ? (
+                <IMHistoryList
+                  entries={llmHistoryParsed}
+                  historyRole={historyRole}
+                  historyAccent={historyAccent}
+                  summarizeHistoryEntry={summarizeHistoryEntry}
+                />
+              ) : (
+                <pre className="mono" style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 12, color: '#94A3B8' }}>
+                  {llmHistoryFormatted || "—"}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
         </aside>
       }
       mid={
         <main className="panel panel-mid">
         <div className="header">
-          <div style={{ fontWeight: 700 }}>{title}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>{title}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {status !== "idle" && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#38bdf8', animation: 'home-float 1.5s ease-in-out infinite alternate' }} />
+                <span className="muted mono" style={{ fontSize: 12 }}>{status}</span>
+              </div>
+            )}
             <button
               className="btn"
               style={{
-                padding: "4px 10px",
+                padding: "3px 8px",
                 fontSize: 12,
-                borderColor: "#7f1d1d",
-                background: stoppingAgents ? "#450a0a" : "#1f0b0b",
-                color: "#fecaca",
+                borderColor: 'rgba(239,68,68,0.3)',
+                background: stoppingAgents ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.06)',
+                color: "#fca5a5",
               }}
               onClick={() => void onInterruptAllAgents()}
               disabled={!session || stoppingAgents}
               title="停止所有 agent 当前循环"
             >
-              {stoppingAgents ? "Stopping..." : "Stop All Agents"}
+              {stoppingAgents ? "停止中…" : <><Square size={12} style={{ fill: 'currentColor' }} /> 停止全部</>}
             </button>
-            <div className="muted" style={{ fontSize: 12 }}>
-              {status !== "idle" ? `${status}...` : ""}
-            </div>
           </div>
         </div>
 
@@ -1751,7 +1847,7 @@ function IMPageInner() {
                   display: "flex",
                   gap: 8,
                   alignItems: "center",
-                  padding: "6px 10px",
+                  padding: "4px 8px",
                   borderRadius: 999,
                   border: "1px solid #27272a",
                   background: "rgba(9,9,11,0.7)",
@@ -1759,10 +1855,10 @@ function IMPageInner() {
                   color: "#e4e4e7",
                 }}
               >
-                <span className="mono">缩放 {Math.round(vizScale * 100)}%</span>
+                <span className="mono" style={{ fontSize: 12 }}>{Math.round(vizScale * 100)}%</span>
                 <button
                   className="btn"
-                  style={{ padding: "2px 8px", fontSize: 12 }}
+                  style={{ padding: "2px 6px", fontSize: 12 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setVizScale((s) => Math.min(s + 0.1, 2));
@@ -1772,7 +1868,7 @@ function IMPageInner() {
                 </button>
                 <button
                   className="btn"
-                  style={{ padding: "2px 8px", fontSize: 12 }}
+                  style={{ padding: "2px 6px", fontSize: 12 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setVizScale((s) => Math.max(s - 0.1, 0.5));
@@ -1782,16 +1878,16 @@ function IMPageInner() {
                 </button>
                 <button
                   className="btn"
-                  style={{ padding: "2px 8px", fontSize: 12 }}
+                  style={{ padding: "2px 6px", fontSize: 12 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setVizScale(0.9);
                     setVizOffset({ x: 0, y: 0 });
                   }}
                 >
-                  Reset
+                  重置
                 </button>
-                <span className="muted mono">Ctrl/⌘ + 滚轮缩放</span>
+                <span className="muted" style={{ fontSize: 12 }}>Ctrl/⌘ 滚轮</span>
               </div>
 
               <div
@@ -1869,7 +1965,7 @@ function IMPageInner() {
                             >
                               <div
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   fontWeight: 700,
                                   color: beam.kind === "create" ? "#bfdbfe" : "#e4e4e7",
                                   border: `1px solid ${beam.kind === "create" ? "rgba(59,130,246,0.5)" : "rgba(82,82,91,0.5)"}`,
@@ -1985,13 +2081,13 @@ function IMPageInner() {
                           transform: "translateX(-50%)",
                           textAlign: "center",
                           width: 120,
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: 700,
                           color: "#e4e4e7",
                         }}
                       >
                         {agent.role}
-                        <div style={{ fontSize: 9, color: ring, marginTop: 2 }}>{status}</div>
+                        <div style={{ fontSize: 12, color: ring, marginTop: 2 }}>{status}</div>
                       </div>
                     </motion.div>
                   );
@@ -1999,78 +2095,7 @@ function IMPageInner() {
               </div>
             </div>
 
-            <div className={cx("viz-events", vizEventsCollapsed && "collapsed")}>
-              {!vizEventsCollapsed ? (
-                <>
-                  <div style={{ fontWeight: 700, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>事件流</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="muted mono">{vizEvents.length}</span>
-                      <button
-                        type="button"
-                        className="viz-events-toggle"
-                        onClick={() => setVizEventsCollapsed(true)}
-                        title="收起"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  {vizEvents.length === 0 ? (
-                    <div className="muted">暂无事件</div>
-                  ) : (
-                    vizEvents
-                      .slice(-6)
-                      .reverse()
-                      .map((evt) => (
-                        <div
-                          key={evt.id}
-                          style={{
-                            marginBottom: 8,
-                            paddingBottom: 8,
-                            borderBottom: "1px solid rgba(39,39,42,0.6)",
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                            <span
-                              style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: 999,
-                                background:
-                                  evt.kind === "agent"
-                                    ? "#60a5fa"
-                                    : evt.kind === "message"
-                                      ? "#fbbf24"
-                                      : evt.kind === "llm"
-                                        ? "#38bdf8"
-                                        : evt.kind === "tool"
-                                          ? "#f97316"
-                                          : "#a855f7",
-                                boxShadow: "0 0 8px rgba(0,0,0,0.5)",
-                              }}
-                            />
-                            <span>{evt.label}</span>
-                          </div>
-                          <div className="muted mono" style={{ fontSize: 11, marginTop: 4 }}>
-                            {new Date(evt.at).toLocaleTimeString()}
-                          </div>
-                        </div>
-                      ))
-                  )}
-                </>
-              ) : null}
-            </div>
-            {vizEventsCollapsed ? (
-              <button
-                type="button"
-                className="viz-events-toggle floating"
-                onClick={() => setVizEventsCollapsed(false)}
-                title="展开"
-              >
-                <ChevronLeft size={16} />
-              </button>
-            ) : null}
+{/* 事件流已移至右侧面板 */}
           </div>
         </div>
 
@@ -2081,7 +2106,7 @@ function IMPageInner() {
             className="input textarea"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Type a message… (Ctrl/Cmd+Enter to send)"
+            placeholder="输入消息… (Ctrl/Cmd+Enter 发送)"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
@@ -2089,8 +2114,8 @@ function IMPageInner() {
               }
             }}
           />
-          <button className="btn btn-primary" onClick={() => void onSend()} disabled={!draft.trim() || status === "send"}>
-            Send
+          <button className="btn btn-primary" style={{ borderRadius: 6, padding: '6px 14px' }} onClick={() => void onSend()} disabled={!draft.trim() || status === "send"}>
+            发送
           </button>
         </div>
         </main>
@@ -2098,80 +2123,71 @@ function IMPageInner() {
       right={
         <>
           <section className="panel panel-right">
+        {/* ── Windsurf 风格头部 ── */}
         <div className="header">
-          <div style={{ fontWeight: 700 }}>Agent Details</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,0.4)' }} />
+            <div style={{ fontWeight: 700, fontSize: 13 }}>实时输出</div>
+          </div>
+          <div className="muted mono" style={{ fontSize: 12 }}>
+            {streamAgentId ? (agentRoleById.get(streamAgentId) ?? streamAgentId.slice(0, 8)) : "—"}
+          </div>
         </div>
 
-        <div className="agent-sidebar-body">
-          <div className="muted" style={{ fontSize: 12 }}>
-            Streaming from: <span className="mono">{streamAgentId ?? "-"}</span>
+        {agentError ? (
+          <div className="toast" style={{ borderColor: "#713f12", background: "rgba(113,63,18,0.25)", color: "#fde68a" }}>
+            {agentError}
           </div>
-          {agentError ? (
-            <div
-              className="toast"
-              style={{ borderColor: "#713f12", background: "rgba(113,63,18,0.25)", color: "#fde68a" }}
-            >
-              {agentError}
+        ) : null}
+
+        {/* ── Windsurf 步骤流 ── */}
+        <div className="ws-flow">
+          {streamSteps.length === 0 ? (
+            <div className="ws-empty">
+              <div className="ws-empty-icon"><Zap size={24} /></div>
+              <div className="ws-empty-text">等待 Agent 输出…</div>
+              <div className="ws-empty-hint">Agent 开始推理后，输出将实时显示在这里</div>
             </div>
-          ) : null}
-
-          <div className="agent-panels">
-            {rightPanels.map((panel, idx) => (
-              <Fragment key={panel.id}>
-                <div
-                  className={cx("agent-panel", panel.collapsed && "collapsed")}
-                  style={
-                    panel.collapsed
-                      ? { flex: `0 0 ${RIGHT_PANEL_HEADER_HEIGHT}px`, height: RIGHT_PANEL_HEADER_HEIGHT }
-                      : { flex: `1 1 ${panel.size}px`, minHeight: RIGHT_PANEL_MIN_HEIGHT }
-                  }
-                >
-                  <button
-                    className="agent-panel-header"
-                    type="button"
-                    onClick={() => toggleRightPanel(panel.id)}
-                  >
-                    <span className="agent-panel-caret">{panel.collapsed ? "▸" : "▾"}</span>
-                    <span>{panel.title}</span>
-                  </button>
-                  {!panel.collapsed ? (
-                    <div className={cx("agent-panel-body", "mono")}>
-                      {panel.id === "history" ? (
-                        Array.isArray(llmHistoryParsed) ? (
-                          <IMHistoryList
-                            entries={llmHistoryParsed}
-                            historyRole={historyRole}
-                            historyAccent={historyAccent}
-                            summarizeHistoryEntry={summarizeHistoryEntry}
-                          />
-                        ) : (
-                          <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                            {llmHistoryFormatted || "—"}
-                          </pre>
-                        )
-                      ) : panel.id === "content" ? (
-                        <MarkdownContent content={contentStream} />
-                      ) : panel.id === "reasoning" ? (
-                        <MarkdownContent content={reasoningStream} />
-                      ) : (
-                        <MarkdownContent content={toolStream} />
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-                {idx < rightPanels.length - 1 ? (
+          ) : (
+            <div className="ws-steps">
+              {streamSteps.map((step, idx) => {
+                const stepLabel = step.type === "reasoning" ? "推理过程" : step.type === "content" ? "回复内容" : "工具调用";
+                const stepBadge = step.type === "reasoning" ? "thinking" : step.type === "content" ? "streaming" : "tool_use";
+                const StepIcon = step.type === "reasoning" ? Brain : step.type === "content" ? MessageSquare : Wrench;
+                const stepContent = step.type === "reasoning" ? reasoningStream : step.type === "content" ? contentStream : toolStream;
+                const previewText = stepContent?.slice(0, 80)?.replace(/\n/g, " ") || "";
+                return (
                   <div
-                    className={cx(
-                      "agent-panel-resizer",
-                      (panel.collapsed || rightPanels[idx + 1]?.collapsed) && "disabled"
+                    key={step.id}
+                    className={cx("ws-step", `ws-step--${step.type}`, step.collapsed && "ws-step--collapsed", !step.done && "ws-step--active")}
+                  >
+                    <button
+                      className="ws-step-header"
+                      onClick={() => setStreamSteps((prev) => prev.map((s) => s.id === step.id ? { ...s, collapsed: !s.collapsed } : s))}
+                    >
+                      <div className={`ws-step-dot ws-step-dot--${step.type}`} />
+                      <StepIcon size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
+                      <span className="ws-step-label">{stepLabel}</span>
+                      <span className="ws-step-num">#{idx + 1}</span>
+                      {!step.done && <span className={`ws-step-badge ws-step-badge--${step.type}`}>{stepBadge}</span>}
+                      {step.done && <span className="ws-step-badge ws-step-badge--done">完成</span>}
+                      <ChevronDown size={12} className={cx("ws-step-chevron", !step.collapsed && "ws-step-chevron--open")} />
+                    </button>
+                    {step.collapsed ? (
+                      <div className="ws-step-preview">{previewText}{previewText.length >= 80 ? "…" : ""}</div>
+                    ) : (
+                      <div className={cx("ws-step-body", step.type === "tool" && "mono")}>
+                        <MarkdownContent content={stepContent} />
+                      </div>
                     )}
-                    onPointerDown={(e) => handleRightPanelResizeStart(idx, e)}
-                  />
-                ) : null}
-              </Fragment>
-            ))}
-          </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+
+{/* 事件流已移至左侧面板 */}
           </section>
           <style jsx global>{`
         @keyframes viz-dash {

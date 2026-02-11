@@ -35,22 +35,22 @@ export default function CreateWorkspace() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-      <input
-        className="input"
-        style={{ maxWidth: 320 }}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Workspace name"
-        disabled={busy}
-      />
-      <button className="btn btn-primary" onClick={() => void onCreate()} disabled={busy}>
-        Create
-      </button>
+    <div className="home-create">
+      <div className="home-create-row">
+        <input
+          className="home-create-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="输入工作区名称"
+          disabled={busy}
+          onKeyDown={(e) => { if (e.key === "Enter") void onCreate(); }}
+        />
+        <button className="home-create-btn" onClick={() => void onCreate()} disabled={busy}>
+          {busy ? "创建中…" : "创建工作区"}
+        </button>
+      </div>
       {error ? (
-        <span className="muted" style={{ color: "#fecaca", fontSize: 13 }}>
-          {error}
-        </span>
+        <div className="home-create-error mono">{error}</div>
       ) : null}
     </div>
   );

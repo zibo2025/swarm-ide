@@ -22,6 +22,28 @@ services:
       - "6379:6379"
     volumes:
       - agent_wechat_redis:/data
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent-wechat-app
+    ports:
+      - "3017:3017"
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/agent_wechat
+      REDIS_URL: redis://redis:6379
+      HOSTNAME: "0.0.0.0"
+      PORT: "3017"
+    volumes:
+      - ./mcp.json:/app/mcp.json:ro
+      - ./skills:/app/skills:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   agent_wechat_pg:
