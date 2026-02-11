@@ -101,17 +101,37 @@ export function MidPanel({
           <button
             className="btn"
             style={{
-              padding: "3px 8px",
+              padding: "2px 8px",
               fontSize: 12,
-              borderColor: 'rgba(239,68,68,0.3)',
-              background: stoppingAgents ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.06)',
-              color: "#fca5a5",
+              borderRadius: 6,
+              border: "1px solid rgba(239,68,68,0.25)",
+              background: stoppingAgents ? 'rgba(239,68,68,0.18)' : 'transparent',
+              color: stoppingAgents ? "#fca5a5" : "#94A3B8",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              transition: "all 0.15s ease",
             }}
             onClick={() => void onInterruptAllAgents()}
             disabled={!session || stoppingAgents}
             title="停止所有 agent 当前循环"
+            onMouseEnter={(e) => {
+              if (!stoppingAgents) {
+                e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
+                e.currentTarget.style.color = '#fca5a5';
+                e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!stoppingAgents) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#94A3B8';
+                e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)';
+              }
+            }}
           >
-            {stoppingAgents ? "停止中…" : <><Square size={12} style={{ fill: 'currentColor' }} /> 停止全部</>}
+            <Square size={10} style={{ fill: 'currentColor' }} />
+            {stoppingAgents ? "停止中…" : "停止"}
           </button>
         </div>
       </div>
