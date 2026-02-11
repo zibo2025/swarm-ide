@@ -24,6 +24,7 @@ type LeftPanelProps = {
   historyRole: (entry: any) => string;
   historyAccent: (role?: string) => string;
   summarizeHistoryEntry: (entry: any, index: number, opts?: { omitRole?: boolean }) => string;
+  renameAgent?: (agentId: string, currentRole: string) => void;
 };
 
 export function LeftPanel({
@@ -46,6 +47,7 @@ export function LeftPanel({
   historyRole,
   historyAccent,
   summarizeHistoryEntry,
+  renameAgent,
 }: LeftPanelProps) {
   const renderGroupRow = (
     g: Group,
@@ -107,7 +109,16 @@ export function LeftPanel({
             ) : tree ? (
               <span className="tree-caret-placeholder" />
             ) : null}
-            <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div
+              style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: tree ? "default" : undefined }}
+              onDoubleClick={(e) => {
+                if (tree && renameAgent) {
+                  e.stopPropagation();
+                  renameAgent(tree.agentId, agentTreeRows.find(r => r.agent.id === tree.agentId)?.agent.role ?? "");
+                }
+              }}
+              title={tree ? "双击修改名称" : undefined}
+            >
               {getGroupLabel(g)}
             </div>
           </div>

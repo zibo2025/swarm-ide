@@ -155,9 +155,9 @@ export function MidPanel({
               className="input textarea"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="输入消息… (Ctrl/Cmd+Enter 发送)"
+              placeholder="输入消息… (Enter 发送, Shift+Enter 换行)"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   void onSend();
                 }

@@ -299,6 +299,23 @@ function IMPageInner() {
     if (role) await createSubAgent(role);
   }, [createSubAgent]);
 
+  const renameAgent = useCallback(async (agentId: string, currentRole: string) => {
+    const newRole = (window.prompt("修改智能体名称", currentRole) ?? "").trim();
+    if (!newRole || newRole === currentRole) return;
+    try {
+      await api(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (session) {
+        void refreshAgents(session);
+        void refreshGroups(session);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [refreshAgents, refreshGroups, session]);
+
   const onInterruptAllAgents = useCallback(async () => {
     if (!session || stoppingAgents) return;
 
@@ -457,6 +474,7 @@ function IMPageInner() {
           historyRole={historyRole}
           historyAccent={historyAccent}
           summarizeHistoryEntry={summarizeHistoryEntry}
+          renameAgent={renameAgent}
         />
       }
       mid={

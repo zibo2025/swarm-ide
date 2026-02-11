@@ -205,6 +205,9 @@ export function useUiStreamEffect({
               [agentId]: payload.event === "ui.agent.tool_call.start" ? "BUSY" : "IDLE",
             }));
           }
+        } else if (payload.event === "ui.agent.renamed") {
+          const role = payload.data?.role ?? "agent";
+          pushVizEvent(payload, `重命名: ${role}`, "agent");
         } else if (payload.event === "ui.agent.interrupt_all") {
           pushVizEvent(payload, "停止全部 Agent", "agent");
           const ids = Array.isArray(payload.data?.agentIds)

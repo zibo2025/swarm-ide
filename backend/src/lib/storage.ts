@@ -929,6 +929,145 @@ export const store = {
     return agent.role;
   },
 
+  async getAgentFull(input: { agentId: UUID }) {
+    const db = getDb();
+    const rows = await db
+      .select({
+        id: agents.id,
+        workspaceId: agents.workspaceId,
+        role: agents.role,
+        parentId: agents.parentId,
+        llmHistory: agents.llmHistory,
+        createdAt: agents.createdAt,
+      })
+      .from(agents)
+      .where(eq(agents.id, input.agentId))
+      .limit(1);
+    if (rows.length === 0) throw new Error("agent not found");
+    const agent = rows[0]!;
+
+    let guidance = "";
+    let historyLength = 0;
+    try {
+      const history = JSON.parse(agent.llmHistory) as Array<{ role: string; content: string }>;
+      historyLength = history.length;
+      const guidanceMsg = history.find(
+        (m) => m.role === "system" && m.content.startsWith("Additional instructions:")
+      );
+      if (guidanceMsg) guidance = guidanceMsg.content.replace(/^Additional instructions:\n?/, "");
+    } catch { /* ignore parse errors */ }
+
+    return {
+      id: agent.id,
+      workspaceId: agent.workspaceId,
+      role: agent.role,
+      parentId: agent.parentId,
+      guidance,
+      historyLength,
+      createdAt: agent.createdAt.toISOString(),
+    };
+  },
+
+  async updateAgentRole(input: { agentId: UUID; role: string; workspaceId?: UUID }) {
+    const db = getDb();
+    const role = input.role.trim();
+    if (!role) throw new Error("role must not be empty");
+
+    await db.update(agents).set({ role }).where(eq(agents.id, input.agentId));
+
+    // Also update P2P group names that were set to the old role
+    const memberRows = await db
+      .select({ groupId: groupMembers.groupId })
+      .from(groupMembers)
+      .where(eq(groupMembers.userId, input.agentId));
+    const groupIds = memberRows.map((r) => r.groupId);
+    if (groupIds.length > 0) {
+      const agentGroups = await db
+        .select({ id: groups.id, name: groups.name })
+        .from(groups)
+        .where(inArray(groups.id, groupIds));
+      for (const g of agentGroups) {
+        if (g.name && g.name !== "default") {
+          await db.update(groups).set({ name: role }).where(eq(groups.id, g.id));
+        }
+      }
+    }
+
+    const workspaceId =
+      input.workspaceId ??
+      (
+        await db
+          .select({ workspaceId: agents.workspaceId })
+          .from(agents)
+          .where(eq(agents.id, input.agentId))
+          .limit(1)
+      )[0]?.workspaceId;
+    if (workspaceId) {
+      await emitDbWrite({
+        workspaceId,
+        table: "agents",
+        action: "update",
+        recordId: input.agentId,
+      });
+      await emitDbWrite({
+        workspaceId,
+        table: "groups",
+        action: "update",
+      });
+    }
+    return { agentId: input.agentId, role };
+  },
+
+  async updateAgentGuidance(input: { agentId: UUID; guidance: string; workspaceId?: UUID }) {
+    const agent = await this.getAgent({ agentId: input.agentId });
+    let history: Array<{ role: string; content: string }>;
+    try {
+      history = JSON.parse(agent.llmHistory);
+    } catch {
+      throw new Error("failed to parse agent llmHistory");
+    }
+
+    const guidanceIdx = history.findIndex(
+      (m) => m.role === "system" && m.content.startsWith("Additional instructions:")
+    );
+    const guidanceMsg = { role: "system" as const, content: `Additional instructions:\n${input.guidance.trim()}` };
+
+    if (input.guidance.trim()) {
+      if (guidanceIdx >= 0) {
+        history[guidanceIdx] = guidanceMsg;
+      } else {
+        history.splice(1, 0, guidanceMsg);
+      }
+    } else if (guidanceIdx >= 0) {
+      history.splice(guidanceIdx, 1);
+    }
+
+    await this.setAgentHistory({ agentId: input.agentId, llmHistory: JSON.stringify(history), workspaceId: input.workspaceId });
+    return { agentId: input.agentId, guidance: input.guidance.trim() };
+  },
+
+  async resetAgentHistory(input: { agentId: UUID; guidance?: string; workspaceId?: UUID }) {
+    const db = getDb();
+    const rows = await db
+      .select({ id: agents.id, workspaceId: agents.workspaceId, role: agents.role })
+      .from(agents)
+      .where(eq(agents.id, input.agentId))
+      .limit(1);
+    if (rows.length === 0) throw new Error("agent not found");
+    const agent = rows[0]!;
+    const wsId = input.workspaceId ?? agent.workspaceId;
+
+    const newHistory = initialAgentHistory({
+      agentId: agent.id,
+      workspaceId: wsId,
+      role: agent.role,
+      guidance: input.guidance,
+    });
+
+    await this.setAgentHistory({ agentId: agent.id, llmHistory: newHistory, workspaceId: wsId });
+    return { agentId: agent.id, role: agent.role, historyReset: true };
+  },
+
   async setAgentHistory(input: { agentId: UUID; llmHistory: string; workspaceId?: UUID }) {
     const db = getDb();
     await db.update(agents).set({ llmHistory: input.llmHistory }).where(eq(agents.id, input.agentId));

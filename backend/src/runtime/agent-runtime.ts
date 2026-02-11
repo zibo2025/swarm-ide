@@ -259,6 +259,41 @@ const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "update_agent",
+      description:
+        "Update an agent's properties: rename (role), change guidance (system instructions), or reset its LLM history. Can target self or any other agent by id.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          agentId: { type: "string", description: "Target agent id. Omit to target self." },
+          role: { type: "string", description: "New role/name for the agent." },
+          guidance: { type: "string", description: "New system-level guidance/instructions. Pass empty string to clear." },
+          resetHistory: { type: "boolean", description: "If true, reset the agent's LLM history to a fresh state (keeps role, applies new guidance if provided)." },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_agent_info",
+      description:
+        "Get detailed info about an agent: role, guidance, history length, parentId, createdAt.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          agentId: { type: "string", description: "Target agent id. Omit to query self." },
+        },
+        required: [],
+      },
+    },
+  },
 ] as const;
 
 const BUILTIN_TOOL_NAMES = new Set(AGENT_TOOLS.map((tool) => tool.function.name));
@@ -754,6 +789,50 @@ class AgentRunner {
       const agents = await store.listAgentsMeta({ workspaceId });
       emitToolDone(true);
       return { ok: true, agents };
+    }
+
+    if (name === "update_agent") {
+      const args = safeJsonParse<{ agentId?: string; role?: string; guidance?: string; resetHistory?: boolean }>(input.call.argumentsText, {});
+      const targetId = (args.agentId ?? "").trim() || this.agentId;
+      const hasRole = typeof args.role === "string" && args.role.trim();
+      const hasGuidance = typeof args.guidance === "string";
+      const hasReset = args.resetHistory === true;
+
+      if (!hasRole && !hasGuidance && !hasReset) {
+        emitToolDone(false);
+        return { ok: false, error: "At least one of role, guidance, or resetHistory is required" };
+      }
+
+      const results: Record<string, unknown> = { agentId: targetId };
+
+      if (hasRole) {
+        const r = await store.updateAgentRole({ agentId: targetId, role: args.role!.trim(), workspaceId });
+        results.role = r.role;
+        getWorkspaceUIBus().emit(workspaceId, {
+          event: "ui.agent.renamed",
+          data: { workspaceId, agentId: targetId, role: r.role },
+        });
+      }
+
+      if (hasReset) {
+        const r = await store.resetAgentHistory({ agentId: targetId, guidance: args.guidance?.trim(), workspaceId });
+        results.historyReset = true;
+        results.resetRole = r.role;
+      } else if (hasGuidance) {
+        const r = await store.updateAgentGuidance({ agentId: targetId, guidance: args.guidance!, workspaceId });
+        results.guidance = r.guidance;
+      }
+
+      emitToolDone(true);
+      return { ok: true, ...results };
+    }
+
+    if (name === "get_agent_info") {
+      const args = safeJsonParse<{ agentId?: string }>(input.call.argumentsText, {});
+      const targetId = (args.agentId ?? "").trim() || this.agentId;
+      const info = await store.getAgentFull({ agentId: targetId });
+      emitToolDone(true);
+      return { ok: true, ...info };
     }
 
     if (name === "send") {
