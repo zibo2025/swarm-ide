@@ -2,14 +2,15 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AgentMeta, AgentStatus, Group, Message, RightPanelId, RightPanelState, WorkspaceDefaults } from "./types";
-import { MID_CHAT_MIN_HEIGHT, MID_GRAPH_MIN_HEIGHT, MID_SPLITTER_SIZE } from "./constants";
+import type { AgentMeta, Group, Message, RightPanelId, RightPanelState, WorkspaceDefaults } from "./types";
 import { api, historyAccent, historyRole, loadSession, saveSession, summarizeHistoryEntry } from "./utils";
 import { useVizLayout } from "./useVizLayout";
 import { useAgentTree } from "./useAgentTree";
 import { useUiStreamEffect } from "./useUiStreamEffect";
 import { useAgentStreamHandler } from "./useAgentStreamHandler";
 import { useDragHandlers } from "./useDragHandlers";
+import { useSyncToRef } from "./useSyncRef";
+import { useResizeObserver } from "./useResizeObserver";
 import { IMShell } from "./IMShell";
 import { LeftPanel } from "./LeftPanel";
 import { MidPanel } from "./MidPanel";
@@ -233,6 +234,18 @@ function IMPageInner() {
     setMidSplitRatio, setNodeOffsets, setRightPanels,
   });
 
+  const applySession = useCallback((s: WorkspaceDefaults) => {
+    saveSession(s);
+    setSession(s);
+    setActiveGroupId(s.defaultGroupId);
+    setStatus("idle");
+    void refreshAgents(s);
+  }, [refreshAgents]);
+
+  const resolveWorkspace = useCallback(async (workspaceId: string) => {
+    return api<WorkspaceDefaults>(`/api/workspaces/${workspaceId}/defaults`);
+  }, []);
+
   const bootstrap = useCallback(async (overrideWorkspaceId: string | null) => {
     setError(null);
     setAgentError(null);
@@ -244,64 +257,29 @@ function IMPageInner() {
     cleanupAgentStream();
 
     if (overrideWorkspaceId) {
-      const ensured = await api<WorkspaceDefaults>(
-        `/api/workspaces/${overrideWorkspaceId}/defaults`
-      );
-      saveSession(ensured);
-      setSession(ensured);
-      setActiveGroupId(ensured.defaultGroupId);
-      setStatus("idle");
-      void refreshAgents(ensured);
+      applySession(await resolveWorkspace(overrideWorkspaceId));
       return;
     }
 
     const existing = loadSession();
     if (existing) {
-      try {
-        const ensured = await api<WorkspaceDefaults>(
-          `/api/workspaces/${existing.workspaceId}/defaults`
-        );
-        saveSession(ensured);
-        setSession(ensured);
-        setActiveGroupId(ensured.defaultGroupId);
-        setStatus("idle");
-        void refreshAgents(ensured);
-        return;
-      } catch {
-        // fall through
-      }
+      try { applySession(await resolveWorkspace(existing.workspaceId)); return; } catch { /* fall through */ }
     }
 
     try {
-      const recent = await api<{
-        workspaces: Array<{ id: string; name: string; createdAt: string }>;
-      }>(`/api/workspaces`);
+      const recent = await api<{ workspaces: Array<{ id: string }> }>(`/api/workspaces`);
       if (recent.workspaces.length > 0) {
-        const targetId = recent.workspaces[0]!.id;
-        const ensured = await api<WorkspaceDefaults>(
-          `/api/workspaces/${targetId}/defaults`
-        );
-        saveSession(ensured);
-        setSession(ensured);
-        setActiveGroupId(ensured.defaultGroupId);
-        setStatus("idle");
-        void refreshAgents(ensured);
+        applySession(await resolveWorkspace(recent.workspaces[0]!.id));
         return;
       }
-    } catch {
-      // fall through
-    }
+    } catch { /* fall through */ }
 
     const created = await api<WorkspaceDefaults>(`/api/workspaces`, {
       method: "POST",
       body: JSON.stringify({ name: "Default Workspace" }),
     });
-    saveSession(created);
-    setSession(created);
-    setActiveGroupId(created.defaultGroupId);
-    setStatus("idle");
-    void refreshAgents(created);
-  }, [cleanupAgentStream, refreshAgents, setAgentError]);
+    applySession(created);
+  }, [applySession, cleanupAgentStream, resolveWorkspace, setAgentError]);
 
   const createWorkspace = useCallback(async (name?: string) => {
     setError(null);
@@ -311,34 +289,21 @@ function IMPageInner() {
       method: "POST",
       body: JSON.stringify({ name: name?.trim() || "New Workspace" }),
     });
-    saveSession(created);
-    setSession(created);
-    setActiveGroupId(created.defaultGroupId);
-    setStatus("idle");
+    applySession(created);
     window.history.replaceState(null, "", "/im");
-    void refreshAgents(created);
     return created;
-  }, [refreshAgents, setAgentError]);
+  }, [applySession, setAgentError]);
 
-  const hireSubAgent = useCallback(async () => {
+  const createSubAgent = useCallback(async (role: string) => {
     if (!session) return;
-    const role = (window.prompt("Sub-agent role", "assistant") ?? "").trim();
-    if (!role) return;
-
     setError(null);
     setAgentError(null);
     setStatus("boot");
-
     try {
       const created = await api<{ agentId: string; groupId: string }>(`/api/agents`, {
         method: "POST",
-        body: JSON.stringify({
-          workspaceId: session.workspaceId,
-          creatorId: session.humanAgentId,
-          role,
-        }),
+        body: JSON.stringify({ workspaceId: session.workspaceId, creatorId: session.humanAgentId, role }),
       });
-
       setStatus("idle");
       void refreshGroups(session);
       void refreshAgents(session);
@@ -348,7 +313,12 @@ function IMPageInner() {
       setStatus("idle");
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [connectAgentStream, refreshGroups, session]);
+  }, [connectAgentStream, refreshAgents, refreshGroups, session, setAgentError]);
+
+  const hireSubAgent = useCallback(async () => {
+    const role = (window.prompt("Sub-agent role", "assistant") ?? "").trim();
+    if (role) await createSubAgent(role);
+  }, [createSubAgent]);
 
   const onInterruptAllAgents = useCallback(async () => {
     if (!session || stoppingAgents) return;
@@ -389,35 +359,10 @@ function IMPageInner() {
 
     if (text.startsWith("/create") || text.startsWith("/hire")) {
       const role = text.replace(/^\/(create|hire)\s*/i, "").trim();
-      if (!role) {
-        setError("Usage: /create <role>");
-        return;
-      }
-
-      setStatus("boot");
-      setError(null);
-
-      try {
-        const created = await api<{ agentId: string; groupId: string }>(`/api/agents`, {
-          method: "POST",
-          body: JSON.stringify({
-            workspaceId: session.workspaceId,
-            creatorId: session.humanAgentId,
-            role,
-          }),
-        });
-        setDraft("");
-        setStatus("idle");
-        void refreshGroups(session);
-        void refreshAgents(session);
-        setActiveGroupId(created.groupId);
-        connectAgentStream(created.agentId);
-        return;
-      } catch (e) {
-        setStatus("idle");
-        setError(e instanceof Error ? e.message : String(e));
-        return;
-      }
+      if (!role) { setError("Usage: /create <role>"); return; }
+      setDraft("");
+      await createSubAgent(role);
+      return;
     }
 
     setStatus("send");
@@ -462,53 +407,14 @@ function IMPageInner() {
     );
   }, [bootstrap, workspaceOverrideId]);
 
-  useEffect(() => {
-    activeGroupIdRef.current = activeGroupId;
-  }, [activeGroupId]);
+  useSyncToRef(activeGroupIdRef, activeGroupId);
+  useSyncToRef(streamAgentIdValueRef, streamAgentId);
+  useSyncToRef(groupsRef, groups);
+  useSyncToRef(agentRoleByIdRef, agentRoleById);
+  useSyncToRef(nodeOffsetsRef, nodeOffsets);
 
-  useEffect(() => {
-    streamAgentIdValueRef.current = streamAgentId;
-  }, [streamAgentId]);
-
-  useEffect(() => {
-    groupsRef.current = groups;
-  }, [groups]);
-
-  useEffect(() => {
-    agentRoleByIdRef.current = agentRoleById;
-  }, [agentRoleById]);
-
-  useEffect(() => {
-    nodeOffsetsRef.current = nodeOffsets;
-  }, [nodeOffsets]);
-
-  useEffect(() => {
-    const el = vizRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const rect = entry.contentRect;
-        if (!rect.width || !rect.height) continue;
-        setVizSize({ width: rect.width, height: rect.height });
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const el = midStackRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const rect = entry.contentRect;
-        if (!rect.height) continue;
-        setMidStackHeight(rect.height);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  useResizeObserver(vizRef, (r) => { if (r.width && r.height) setVizSize({ width: r.width, height: r.height }); });
+  useResizeObserver(midStackRef, (r) => { if (r.height) setMidStackHeight(r.height); });
 
   useEffect(() => {
     const el = vizRef.current;
