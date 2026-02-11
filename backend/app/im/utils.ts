@@ -39,6 +39,38 @@ export function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  human: "人类",
+  assistant: "助手",
+  brainstormer: "头脑风暴",
+  coder: "程序员",
+  productmanager: "产品经理",
+  researcher: "研究员",
+  reviewer: "审核员",
+  planner: "规划师",
+  tester: "测试员",
+  system: "系统",
+  tool: "工具",
+  user: "用户",
+  unknown: "未知",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  IDLE: "空闲",
+  BUSY: "忙碌",
+  WAKING: "唤醒中",
+};
+
+export function roleLabel(role?: string): string {
+  if (!role) return "未知";
+  return ROLE_LABELS[role] ?? role;
+}
+
+export function statusLabel(status?: string): string {
+  if (!status) return "空闲";
+  return STATUS_LABELS[status] ?? status;
+}
+
 export function roleColor(role?: string) {
   if (!role) return "#e4e4e7";
   if (role === "human") return "#f8fafc";
@@ -87,16 +119,22 @@ export function summarizeHistoryEntry(entry: any, index: number, opts?: { omitRo
 }
 
 export function historyRole(entry: any) {
-  return typeof entry?.role === "string" ? entry.role : "unknown";
+  const raw = typeof entry?.role === "string" ? entry.role : "unknown";
+  return roleLabel(raw);
 }
+
+const ROLE_ACCENT: Record<string, string> = {
+  human: "#f8fafc", "人类": "#f8fafc",
+  assistant: "#38bdf8", "助手": "#38bdf8",
+  productmanager: "#fb7185", "产品经理": "#fb7185",
+  coder: "#34d399", "程序员": "#34d399",
+  brainstormer: "#fbbf24", "头脑风暴": "#fbbf24",
+  tool: "#fbbf24", "工具": "#fbbf24",
+  system: "#a78bfa", "系统": "#a78bfa",
+  user: "#f8fafc", "用户": "#f8fafc",
+};
 
 export function historyAccent(role?: string) {
   if (!role) return "#94a3b8";
-  if (role === "human") return "#f8fafc";
-  if (role === "assistant") return "#38bdf8";
-  if (role === "productmanager") return "#fb7185";
-  if (role === "coder") return "#34d399";
-  if (role === "tool") return "#fbbf24";
-  if (role === "system") return "#a78bfa";
-  return "#94a3b8";
+  return ROLE_ACCENT[role] ?? "#94a3b8";
 }

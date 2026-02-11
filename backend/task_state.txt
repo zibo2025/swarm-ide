@@ -1,0 +1,17 @@
+### Brainstormer_Experience (体验导向)
+- agent_id: 34f66761-041e-48dd-b46a-c4ba05940204
+- 角色: brainstormer_experience
+- 专长: 用户体验、需求洞察、情感化设计
+- 当前任务: 待接收任务
+- 当前进展: 已就绪，准备协作
+- 上次更新: 2026-02-11T10:07:00Z
+
+### Brainstormer_Technical (技术导向)
+- agent_id: 299cf175-f59e-4324-9390-78a936d076bc
+- 角色: brainstormer_technical
+- 专长: 技术架构、可行性分析、工程实现
+- 当前任务: 待接收任务
+- 当前进展: 已就绪，准备从技术角度参与协作
+- 上次更新: 2026-02-11T10:08:00Z
+
+---

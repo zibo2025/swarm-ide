@@ -1,5 +1,5 @@
 import { Brain, ChevronDown, MessageSquare, Wrench, Zap } from "lucide-react";
-import { cx } from "./utils";
+import { cx, roleLabel } from "./utils";
 import { MarkdownContent } from "./MarkdownContent";
 
 type StreamStep = {
@@ -40,7 +40,7 @@ export function RightPanel({
             <div style={{ fontWeight: 700, fontSize: 13 }}>实时输出</div>
           </div>
           <div className="muted mono" style={{ fontSize: 12 }}>
-            {streamAgentId ? (agentRoleById.get(streamAgentId) ?? streamAgentId.slice(0, 8)) : "—"}
+            {streamAgentId ? roleLabel(agentRoleById.get(streamAgentId)) : "—"}
           </div>
         </div>
 

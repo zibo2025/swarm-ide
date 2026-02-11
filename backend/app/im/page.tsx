@@ -3,14 +3,12 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentMeta, Group, Message, RightPanelId, RightPanelState, WorkspaceDefaults } from "./types";
-import { api, historyAccent, historyRole, loadSession, saveSession, summarizeHistoryEntry } from "./utils";
+import { api, historyAccent, historyRole, loadSession, roleLabel, saveSession, summarizeHistoryEntry } from "./utils";
 import { useVizLayout } from "./useVizLayout";
 import { useAgentTree } from "./useAgentTree";
 import { useUiStreamEffect } from "./useUiStreamEffect";
 import { useAgentStreamHandler } from "./useAgentStreamHandler";
-import { useDragHandlers } from "./useDragHandlers";
 import { useSyncToRef } from "./useSyncRef";
-import { useResizeObserver } from "./useResizeObserver";
 import { IMShell } from "./IMShell";
 import { LeftPanel } from "./LeftPanel";
 import { MidPanel } from "./MidPanel";
@@ -39,10 +37,6 @@ function IMPageInner() {
   const [stoppingAgents, setStoppingAgents] = useState(false);
 
   const [llmHistory, setLlmHistory] = useState("");
-  const [vizSize, setVizSize] = useState({ width: 640, height: 260 });
-  const [vizScale, setVizScale] = useState(0.9);
-  const [vizOffset, setVizOffset] = useState({ x: 0, y: 0 });
-  const [vizIsPanning, setVizIsPanning] = useState(false);
   const [vizEventsCollapsed, setVizEventsCollapsed] = useState(true);
   const [rightPanels, setRightPanels] = useState<RightPanelState[]>([
     { id: "history", title: "LLM 历史", size: 320, collapsed: true },
@@ -51,9 +45,6 @@ function IMPageInner() {
     { id: "tools", title: "实时工具", size: 200, collapsed: false },
   ]);
   const [midView, setMidView] = useState<"chat" | "canvas">("chat");
-  const [midSplitRatio, setMidSplitRatio] = useState(0.55);
-  const [midStackHeight, setMidStackHeight] = useState(0);
-  const [nodeOffsets, setNodeOffsets] = useState<Record<string, { x: number; y: number }>>({});
   const [collapsedAgents, setCollapsedAgents] = useState<Record<string, boolean>>({});
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -61,12 +52,7 @@ function IMPageInner() {
   const streamAgentIdValueRef = useRef<string | null>(null);
   const agentRoleByIdRef = useRef<Map<string, string>>(new Map());
   const llmHistoryReqIdRef = useRef(0);
-  const vizRef = useRef<HTMLDivElement | null>(null);
-  const midStackRef = useRef<HTMLDivElement | null>(null);
-  const midChatHeightRef = useRef(0);
-  const nodeOffsetsRef = useRef<Record<string, { x: number; y: number }>>({});
   const groupsRef = useRef<Group[]>([]);
-  const vizPanStartRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
 
   const activeGroup = useMemo(
@@ -80,7 +66,7 @@ function IMPageInner() {
     return map;
   }, [agents]);
 
-  const vizLayout = useVizLayout(agents, session, vizSize, nodeOffsets);
+  const vizLayout = useVizLayout(agents, session, { width: 800, height: 400 }, {});
 
   const getGroupLabel = useCallback(
     (g: Group | null | undefined) => {
@@ -90,11 +76,11 @@ function IMPageInner() {
 
       const memberRoles = g.memberIds
         .filter((id) => id !== session?.humanAgentId)
-        .map((id) => agentRoleById.get(id) ?? id.slice(0, 8));
+        .map((id) => roleLabel(agentRoleById.get(id) ?? id.slice(0, 8)));
 
-      if (memberRoles.length === 1) return `P2P 人类↔${memberRoles[0]}`;
+      if (memberRoles.length === 1) return `人类 ↔ ${memberRoles[0]}`;
       if (memberRoles.length === 2) return `${memberRoles[0]} ↔ ${memberRoles[1]}`;
-      if (memberRoles.length > 2) return `Group (${memberRoles.length})`;
+      if (memberRoles.length > 2) return `群组 (${memberRoles.length})`;
       return "Group";
     },
     [agentRoleById, session?.defaultGroupId, session?.humanAgentId]
@@ -226,13 +212,6 @@ function IMPageInner() {
     refreshGroups, refreshAgents, refreshLlmHistory, refreshMessages,
   });
 
-  const {
-    handleNodePointerDown, handleNodeMouseDown, handleNodeTouchStart,
-  } = useDragHandlers({
-    midStackRef, midChatHeightRef, nodeOffsetsRef,
-    midSplitRatio, vizScale, rightPanels,
-    setMidSplitRatio, setNodeOffsets, setRightPanels,
-  });
 
   const applySession = useCallback((s: WorkspaceDefaults) => {
     saveSession(s);
@@ -411,23 +390,6 @@ function IMPageInner() {
   useSyncToRef(streamAgentIdValueRef, streamAgentId);
   useSyncToRef(groupsRef, groups);
   useSyncToRef(agentRoleByIdRef, agentRoleById);
-  useSyncToRef(nodeOffsetsRef, nodeOffsets);
-
-  useResizeObserver(vizRef, (r) => { if (r.width && r.height) setVizSize({ width: r.width, height: r.height }); });
-  useResizeObserver(midStackRef, (r) => { if (r.height) setMidStackHeight(r.height); });
-
-  useEffect(() => {
-    const el = vizRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.05 : 0.05;
-      setVizScale((s) => Math.min(Math.max(s + delta, 0.5), 2));
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -466,6 +428,11 @@ function IMPageInner() {
   const toggleAgentCollapsed = useCallback((agentId: string) => {
     setCollapsedAgents((prev) => ({ ...prev, [agentId]: !prev[agentId] }));
   }, []);
+
+  const onVizNodeClick = useCallback((agentId: string) => {
+    const group = groupByAgentId.get(agentId);
+    if (group) setActiveGroupId(group.id);
+  }, [groupByAgentId]);
 
   return (
     <IMShell
@@ -508,24 +475,13 @@ function IMPageInner() {
           setDraft={setDraft}
           onSend={onSend}
           error={error}
-          midStackRef={midStackRef}
           vizCanvasProps={{
-            vizRef,
-            vizSize,
-            vizScale,
-            vizOffset,
-            vizIsPanning,
-            vizPanStartRef,
             vizLayout,
             vizBeams,
             agentStatusById,
             streamAgentId,
-            setVizIsPanning,
-            setVizOffset,
-            setVizScale,
-            handleNodePointerDown,
-            handleNodeMouseDown,
-            handleNodeTouchStart,
+            humanAgentId: session?.humanAgentId ?? null,
+            onNodeClick: onVizNodeClick,
           }}
         />
       }

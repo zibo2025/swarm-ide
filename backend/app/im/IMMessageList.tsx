@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { roleLabel } from "./utils";
 
 type Message = {
   id: string;
@@ -41,7 +42,7 @@ export function IMMessageList({
           >
             <div className={cx("bubble", isMe ? "me" : "other")}>
               <div className="bubble-meta">
-                {fmtTime(m.sendTime)} • {senderRole}
+                {fmtTime(m.sendTime)} • {roleLabel(senderRole)}
               </div>
               {renderContent(m.content)}
             </div>

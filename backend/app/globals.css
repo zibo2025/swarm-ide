@@ -90,13 +90,14 @@ code {
 }
 
 pre {
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(51, 65, 85, 0.4);
-  padding: 10px 12px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.25);
+  padding: 6px 8px;
+  margin: 4px 0;
   overflow-x: auto;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 pre code {
@@ -106,6 +107,56 @@ pre code {
   border: none;
   color: #e2e8f0;
   font-size: inherit;
+}
+
+/* ── Streamdown code-block overrides (compact / minimal) ── */
+
+[data-streamdown="code-block"] {
+  margin: 4px 0 !important;
+  border-radius: 6px !important;
+  border-color: rgba(51, 65, 85, 0.3) !important;
+}
+
+[data-streamdown="code-block-header"] {
+  padding: 2px 8px !important;
+  background: rgba(15, 23, 42, 0.5) !important;
+}
+
+[data-streamdown="code-block-body"] {
+  padding: 6px 8px !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+}
+
+[data-streamdown="code-block-body"] span::before {
+  margin-right: 8px !important;
+  width: 16px !important;
+  font-size: 11px !important;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── React Flow dark theme overrides ── */
+
+.react-flow__controls button {
+  background: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid rgba(51, 65, 85, 0.4) !important;
+  color: #94A3B8 !important;
+  fill: #94A3B8 !important;
+}
+
+.react-flow__controls button:hover {
+  background: rgba(51, 65, 85, 0.6) !important;
+  color: #e2e8f0 !important;
+  fill: #e2e8f0 !important;
+}
+
+.react-flow__controls button svg {
+  fill: currentColor !important;
 }
 
 /* ── VS Code-style resizable shell ── */
@@ -359,170 +410,6 @@ pre code {
   min-height: 0;
 }
 
-.mid-stack {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: 1fr 6px 1fr;
-  overflow: hidden;
-}
-
-.mid-resizer {
-  cursor: row-resize;
-  background: transparent;
-  touch-action: none;
-  user-select: none;
-}
-
-.viz-node {
-  touch-action: none;
-  user-select: none;
-  overflow: visible;
-}
-
-.mid-resizer:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.viz-shell {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.viz-canvas {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-}
-
-.viz-events {
-  width: 220px;
-  max-width: 240px;
-  overflow: auto;
-  border: 1px solid rgba(39, 39, 42, 0.5);
-  border-radius: 8px;
-  background: rgba(9, 9, 11, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 8px;
-  font-size: 12px;
-  color: #e4e4e7;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-  height: calc(100% - 12px);
-  margin: 6px 8px 6px 0;
-  transition: width 160ms ease, opacity 160ms ease, margin 160ms ease;
-}
-
-.viz-events.collapsed {
-  width: 0;
-  padding: 0;
-  border: none;
-  margin: 6px 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.viz-events-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  border: 1px solid rgba(39, 39, 42, 0.6);
-  background: rgba(9, 9, 11, 0.8);
-  color: #a1a1aa;
-  cursor: pointer;
-  transition: background 150ms, color 150ms, border-color 150ms;
-}
-
-.viz-events-toggle:hover {
-  background: rgba(56, 189, 248, 0.1);
-  border-color: rgba(56, 189, 248, 0.3);
-  color: #38bdf8;
-}
-
-.viz-events-toggle.floating {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  z-index: 2;
-}
-
-.viz-node.active .viz-reticle {
-  position: absolute;
-  inset: -18px;
-  border: 2px solid rgba(56, 189, 248, 0.85);
-  border-radius: 999px;
-  box-shadow: 0 0 24px rgba(56, 189, 248, 0.45);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.viz-node.active .viz-reticle::before,
-.viz-node.active .viz-reticle::after {
-  content: "";
-  position: absolute;
-  background: rgba(56, 189, 248, 0.8);
-}
-
-.viz-node.active .viz-reticle::before {
-  width: 2px;
-  height: calc(100% + 20px);
-  left: 50%;
-  top: -10px;
-  transform: translateX(-50%);
-}
-
-.viz-node.active .viz-reticle::after {
-  height: 2px;
-  width: calc(100% + 20px);
-  top: 50%;
-  left: -10px;
-  transform: translateY(-50%);
-}
-
-.viz-node.active {
-  z-index: 3;
-}
-
-.viz-node.active .viz-reticle::before,
-.viz-node.active .viz-reticle::after {
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
-}
-
-@keyframes viz-reticle-pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.9;
-  }
-  70% {
-    transform: scale(1.08);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(1.12);
-    opacity: 0;
-  }
-}
-
-.viz-reticle-pulse {
-  position: absolute;
-  inset: -10px;
-  border-radius: 999px;
-  border: 2px solid rgba(56, 189, 248, 0.35);
-  animation: viz-reticle-pulse 2s ease-out infinite;
-}
-
-.viz-node.active {
-  z-index: 3;
-  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.4));
-}
-
 .tree-caret,
 .tree-caret-placeholder {
   width: 16px;
@@ -606,6 +493,14 @@ pre code {
   font-size: 13px;
   line-height: 1.6;
   transition: transform 100ms ease-out;
+}
+
+.bubble pre {
+  border-radius: 3px;
+  padding: 4px 6px;
+  margin: 2px 0;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .bubble.me {

@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from "react";
+import type { RefObject } from "react";
 import { LayoutGrid, MessageSquare, Square } from "lucide-react";
 import type { Message } from "./types";
 import { cx, fmtTime } from "./utils";
@@ -26,7 +26,6 @@ type MidPanelProps = {
   onSend: () => Promise<void>;
   error: string | null;
   // Canvas
-  midStackRef: RefObject<HTMLDivElement | null>;
   vizCanvasProps: VizCanvasProps;
 };
 
@@ -45,7 +44,6 @@ export function MidPanel({
   setDraft,
   onSend,
   error,
-  midStackRef,
   vizCanvasProps,
 }: MidPanelProps) {
   return (
@@ -171,7 +169,7 @@ export function MidPanel({
           </div>
         </>
       ) : (
-        <div className="viz-shell" ref={midStackRef} style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0 }}>
           <VizCanvas {...vizCanvasProps} />
 
           {/* 事件流已移至左侧面板 */}

@@ -13,6 +13,7 @@
     "@modelcontextprotocol/sdk": "^1.23.0",
     "@streamdown/code": "^1.0.1",
     "@streamdown/mermaid": "^1.0.1",
+    "@xyflow/react": "^12.10.0",
     "drizzle-orm": "^0.45.1",
     "framer-motion": "^11.2.10",
     "lucide-react": "^0.469.0",
